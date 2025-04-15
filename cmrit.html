@@ -1,0 +1,338 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CMRIT Attendance Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #e0eafc, #cfdef3);
+      color: #333;
+      padding: 20px;
+      transition: background 0.5s ease;
+    }
+    body.dark-mode {
+      background: linear-gradient(to right, #141e30, #243b55);
+      color: #eee;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    .clock {
+      text-align: center;
+      font-size: 1.2em;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    .card {
+      background: linear-gradient(to bottom, #ffffff, #f1f1f1);
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin: auto;
+      max-width: 1000px;
+      transition: background 0.3s ease;
+    }
+    .dark-mode .card {
+      background: linear-gradient(to bottom, #1f1f1f, #2a2a2a);
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+    .button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 0.3s;
+    }
+    .button:hover {
+      opacity: 0.85;
+    }
+    .full-btn {
+      background: linear-gradient(to right, #43e97b, #38f9d7);
+      color: white;
+    }
+    .half-btn {
+      background: linear-gradient(to right, #f7971e, #ffd200);
+      color: white;
+    }
+    .dark-toggle {
+      background: linear-gradient(to right, #434343, #000000);
+      color: white;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+      font-size: 14px;
+    }
+    th {
+      background: linear-gradient(to right, #dfe9f3, #ffffff);
+    }
+    .dark-mode th {
+      background: linear-gradient(to right, #2f2f2f, #1e1e1e);
+    }
+    .attended { background-color: #c8e6c9; }
+    .halfday { background-color: #fff9c4; }
+    .absent { background-color: #ffcdd2; }
+    .holiday { background-color: #ffe0b2; }
+    .note { font-style: italic; font-size: 12px; color: #666; }
+    input[type="date"], input[type="text"] {
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    input[type="file"] {
+      font-size: 12px;
+    }
+    @media (max-width: 600px) {
+      .controls {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
+</head>
+<body>
+<h1>📘 CMRIT Attendance Tracker</h1>
+<div class="clock" id="liveClock">--:--:--</div>
+<div class="card">
+  <div class="controls">
+    <button class="button full-btn" onclick="checkIn()">Check In (Before 8AM)</button>
+    <button class="button full-btn" onclick="checkOut()">Check Out (After 4PM)</button>
+    <button class="button full-btn" onclick="markFullDay()">✅ Mark Full Day</button>
+    <button class="button half-btn" onclick="markHalfDay()">✳️ Mark Half Day</button>
+    <input type="date" id="datePicker">
+    <input type="text" id="noteInput" placeholder="Add note">
+    <button class="button" onclick="markSuddenHoliday()">🟠 Sudden Holiday</button>
+    <button class="button" onclick="exportCSV()">📤 Export CSV</button>
+    <input type="file" id="importFile" onchange="importCSV(event)">
+    <button class="button" onclick="resetAll()">🧹 Reset All</button>
+    <button class="button dark-toggle" onclick="toggleDarkMode()">🌙 Dark Mode</button>
+  </div>
+
+  <div id="stats" style="text-align:center; margin-bottom: 10px;"></div>
+  <table id="attendanceTable">
+    <thead>
+      <tr><th>Date</th><th>Day</th><th>Status</th><th>Note</th><th>Salary (₹)</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2 style="margin-top: 30px;">📊 Monthly Summary</h2>
+  <table id="monthlySummary">
+    <thead>
+      <tr><th>Month</th><th>Full Days</th><th>Half Days</th><th>Salary (₹)</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const startDate = new Date("2025-04-11");
+const today = new Date();
+const fullSalary = 29800 / 30;
+const halfSalary = fullSalary / 2;
+const holidays = [
+  "2025-04-14", "2025-04-18", "2025-04-19", "2025-04-20",
+  "2025-04-27", "2025-04-30", "2025-05-01", "2025-05-03",
+  "2025-05-04", "2025-05-17", "2025-05-18", "2025-06-07", "2025-06-08",
+  "2025-06-15", "2025-07-05", "2025-07-06", "2025-07-12", "2025-07-13",
+  "2025-08-02", "2025-08-03", "2025-08-15", "2025-08-16", "2025-08-17",
+  "2025-08-27", "2025-08-31", "2025-09-05", "2025-09-06", "2025-09-07",
+  "2025-09-14", "2025-09-20", "2025-09-21", "2025-09-28"
+];
+let data = JSON.parse(localStorage.getItem("cmrit_attendance")) || {};
+if (!data["2025-04-11"]) data["2025-04-11"] = { status: "present", note: "Joining Day" };
+if (!data["2025-04-12"]) data["2025-04-12"] = { status: "present", note: "2nd Day" };
+save();
+
+function formatDate(d) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+function getISO(d) {
+  return d.toISOString().split('T')[0];
+}
+function save() {
+  localStorage.setItem("cmrit_attendance", JSON.stringify(data));
+}
+function checkIn() {
+  const now = new Date();
+  if (now.getHours() >= 8) return alert("⛔ Check-in only before 8 AM.");
+  const date = getISO(now);
+  data[date] = data[date] || {};
+  data[date].checkIn = true;
+  data[date].note = data[date].note || "Checked In";
+  save(); renderTable();
+}
+function checkOut() {
+  const now = new Date();
+  if (now.getHours() < 16) return alert("⛔ Check-out only after 4 PM.");
+  const date = getISO(now);
+  if (data[date]?.checkIn) {
+    data[date].status = "present";
+    data[date].note = "Checked In & Out";
+    save(); renderTable();
+  } else {
+    alert("❌ No check-in before 8 AM.");
+  }
+}
+function markHalfDay() {
+  const date = document.getElementById("datePicker").value;
+  const note = document.getElementById("noteInput").value;
+  if (!date) return alert("Select a date.");
+  data[date] = { status: "half", note };
+  save(); renderTable();
+}
+function markFullDay() {
+  const date = document.getElementById("datePicker").value;
+  const note = document.getElementById("noteInput").value;
+  if (!date) return alert("Select a date.");
+  data[date] = { status: "present", note: note || "Marked Full Day" };
+  save(); renderTable();
+}
+function markSuddenHoliday() {
+  const date = document.getElementById("datePicker").value;
+  if (!date) return alert("Select a date.");
+  data[date] = { status: "sudden", note: "Sudden Declared Holiday" };
+  save(); renderTable();
+}
+function toggleDarkMode() {
+  document.body.classList.toggle("dark-mode");
+}
+function resetAll() {
+  if (confirm("Reset all data?")) {
+    data = {}; save(); renderTable();
+  }
+}
+function exportCSV() {
+  let csv = "Date,Day,Status,Note,Salary\n";
+  for (const [date, entry] of Object.entries(data)) {
+    const d = new Date(date);
+    const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+    const paid = entry.status === "present" ? fullSalary : entry.status === "half" ? halfSalary : 0;
+    const label = entry.status === "present" ? "Attended" :
+                  entry.status === "half" ? "Half Day" :
+                  entry.status === "sudden" ? "Sudden Holiday" : "Absent";
+    csv += `${formatDate(new Date(date))},${day},${label},${entry.note || ""},${paid.toFixed(2)}\n`;
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'attendance.csv';
+  a.click();
+}
+function importCSV(event) {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const lines = e.target.result.split("\n").slice(1);
+    lines.forEach(line => {
+      const [rawDate, , status, note] = line.split(',');
+      if (rawDate) {
+        const [dd, mm, yyyy] = rawDate.split('-');
+        const iso = `${yyyy}-${mm}-${dd}`;
+        data[iso] = {
+          status: status.includes("Half") ? "half" :
+                  status.includes("Sudden") ? "sudden" : "present",
+          note
+        };
+      }
+    });
+    save(); renderTable();
+  };
+  reader.readAsText(file);
+}
+function renderClock() {
+  const now = new Date();
+  document.getElementById("liveClock").innerText = now.toLocaleTimeString();
+  setTimeout(renderClock, 1000);
+}
+function renderTable() {
+  const tbody = document.querySelector("#attendanceTable tbody");
+  const summaryBody = document.querySelector("#monthlySummary tbody");
+  tbody.innerHTML = ""; summaryBody.innerHTML = "";
+  let current = new Date(startDate);
+  let attended = 0, halfDays = 0, absents = 0, holidaysCount = 0, totalDays = 0, totalSalary = 0;
+  const monthlyStats = {};
+  while (current <= today) {
+    const iso = getISO(current);
+    const dmy = formatDate(current);
+    const weekday = current.toLocaleDateString('en-US', { weekday: 'long' });
+    const isHoliday = holidays.includes(iso);
+    const isSunday = current.getDay() === 0;
+    const entry = data[iso] || {};
+    const note = entry.note || "";
+    let status = "Absent", className = "absent", salary = 0;
+    if (entry.status === "present") {
+      status = (isHoliday || isSunday) ? "Attended (Holiday)" : "Attended";
+      className = "attended"; attended++; salary = fullSalary;
+    } else if (entry.status === "half") {
+      status = "Half Day"; className = "halfday"; halfDays++; salary = halfSalary;
+    } else if (isHoliday || isSunday || entry.status === "sudden") {
+      status = entry.status === "sudden" ? "Sudden Holiday (Paid)" : "Holiday (Paid)";
+      className = "holiday"; holidaysCount++; salary = fullSalary;
+    } else { absents++; }
+    totalSalary += salary;
+    if (!isHoliday && !isSunday && entry.status !== "sudden") totalDays++;
+    const monthKey = current.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { full: 0, half: 0, salary: 0 };
+    if (entry.status === "present") monthlyStats[monthKey].full++;
+    if (entry.status === "half") monthlyStats[monthKey].half++;
+    monthlyStats[monthKey].salary += salary;
+    tbody.innerHTML += `
+      <tr class="${className}">
+        <td>${dmy}</td>
+        <td>${weekday}</td>
+        <td>${status}</td>
+        <td class="note">${note}</td>
+        <td>₹${salary.toFixed(2)}</td>
+      </tr>
+    `;
+    current.setDate(current.getDate() + 1);
+  }
+  const percent = totalDays ? ((attended + 0.5 * halfDays) / totalDays * 100).toFixed(1) : 0;
+  document.getElementById("stats").innerHTML = `
+    <strong>Total Days:</strong> ${totalDays} |
+    <strong>Full Days:</strong> ${attended} |
+    <strong>Half Days:</strong> ${halfDays} |
+    <strong>Absent:</strong> ${absents} |
+    <strong>Paid Holidays:</strong> ${holidaysCount} |
+    <strong>Attendance %:</strong> ${percent}% |
+    <strong>Total Salary:</strong> ₹${totalSalary.toFixed(2)}
+  `;
+  for (const [month, data] of Object.entries(monthlyStats)) {
+    summaryBody.innerHTML += `
+      <tr>
+        <td>${month}</td>
+        <td>${data.full}</td>
+        <td>${data.half}</td>
+        <td>₹${data.salary.toFixed(2)}</td>
+      </tr>
+    `;
+  }
+}
+renderTable(); renderClock();
+</script>
+</body>
+</html>
